@@ -4,6 +4,24 @@ Professional Blender add-on for building, organizing, resizing, exporting, and r
 
 Designed for production-oriented workflows that need clean texture packaging, fast iteration, and predictable output from inside Blender.
 
+## Requirements
+
+- Blender 4.0+
+- Sollumz enabled
+- `texconv.exe`
+
+Download `texconv.exe` from the official Microsoft DirectXTex page:
+
+- [Texconv - Microsoft DirectXTex](https://github.com/microsoft/DirectXTex/wiki/texconv)
+
+After downloading, save `texconv.exe` in any folder you want, then point to that `.exe` in the add-on setup/preferences.
+
+You can also place it here:
+
+```text
+s27_ytd_manager/bin/texconv.exe
+```
+
 ## Overview
 
 `S27 YTD Manager` turns Sollumz Drawable and Fragment assets into export-ready YTD texture packages without requiring manual texture bookkeeping.
@@ -36,19 +54,7 @@ The add-on can:
 | XML generation | Writes OpenFormats `.ytd.xml` with the exported dimensions and mip count |
 | DDS reinjection | Reloads exported DDS files back into Sollumz nodes for validation |
 | Output cleanup | Removes stale DDS files that no longer belong to the current pack |
-| BC/DXT validation | Warns and blocks export when `DXT1` / `DXT5` output dimensions are not multiples of 4 |
-
-## Requirements
-
-- Blender 5.0+
-- Sollumz enabled
-- `texconv.exe`
-
-`texconv.exe` can be configured in the add-on preferences, or placed here:
-
-```text
-s27_ytd_manager/bin/texconv.exe
-```
+| BC/DXT validation | Warns when `DXT1` / `DXT5` output dimensions are not multiples of 4 |
 
 ## Installation
 
