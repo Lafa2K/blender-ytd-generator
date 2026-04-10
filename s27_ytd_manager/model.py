@@ -1,4 +1,4 @@
-﻿import bpy
+import bpy
 from bpy.props import (
     BoolProperty,
     CollectionProperty,
@@ -63,6 +63,11 @@ def get_resize_values_for_dimensions(width: int, height: int) -> tuple[str, ...]
 def texture_resize_items(self, _context):
     width = int(getattr(self, "width", 0) or 0)
     height = int(getattr(self, "height", 0) or 0)
+    image = getattr(self, "image", None)
+    if (width <= 0 or height <= 0) and image is not None:
+        image_width, image_height = image.size
+        width = width or int(image_width)
+        height = height or int(image_height)
     return [RESIZE_ITEM_MAP[value] for value in get_resize_values_for_dimensions(width, height)]
 
 
@@ -92,6 +97,16 @@ class S27YTDManagerPreferences(AddonPreferences):
         default="//S27_YTD_Build",
         description="Base folder used when a scene does not override the build directory",
     )
+    auto_alpha_scanner_enabled: BoolProperty(
+        name="AutoScanner Alpha",
+        description="Automatically scan alpha pixels to suggest DXT5 when Auto compression is enabled",
+        default=True,
+    )
+    fix_power_of_two_image: BoolProperty(
+        name="Fix Power Of 2 Image",
+        description="Automatically shrink exported output to power-of-two dimensions for each axis, never enlarging the image",
+        default=True,
+    )
     alpha_tolerance_pct: FloatProperty(
         name="Auto Alpha Tolerance",
         description="Pixels with alpha below the fake-alpha cutoff must exceed this percentage to switch Auto to DXT5",
@@ -112,6 +127,8 @@ class S27YTDManagerPreferences(AddonPreferences):
         layout.use_property_split = True
         layout.prop(self, "texconv_path")
         layout.prop(self, "default_output_dir")
+        layout.prop(self, "auto_alpha_scanner_enabled")
+        layout.prop(self, "fix_power_of_two_image")
         layout.prop(self, "alpha_tolerance_pct")
         layout.prop(self, "fake_alpha_cutoff")
 
@@ -143,12 +160,13 @@ class S27YTDUniqueTexture(PropertyGroup):
     source_path: StringProperty(name="Source Path")
     source_exists: BoolProperty(name="Source Exists", default=False)
     embedded: BoolProperty(name="Embedded", default=False)
-    include_in_ytd: BoolProperty(name="Include", default=True)
     compression: EnumProperty(name="Compression", items=COMPRESSION_ITEMS, default="AUTO")
     resize_max_dimension: EnumProperty(name="Resize", items=texture_resize_items)
     suggested_compression: StringProperty(name="Suggested Compression", default="DXT1")
     suggested_reason: StringProperty(name="Suggested Reason")
+    metadata_signature: StringProperty(name="Metadata Signature")
     sampler_hints: StringProperty(name="Sampler Hints")
+    alpha_material_hint: StringProperty(name="Alpha Material Hint")
     warning: StringProperty(name="Warning")
     has_conflict: BoolProperty(name="Name Conflict", default=False)
     embedded_ref_count: IntProperty(name="Embedded Ref Count", default=0)

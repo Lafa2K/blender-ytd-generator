@@ -1,4 +1,4 @@
-﻿import os
+import os
 import bpy
 from . import operators, utils
 
@@ -78,6 +78,10 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
             text=os.path.basename(texconv_path) if texconv_path else "Texconv.exe not configured",
             icon="CHECKMARK" if texconv_path else "ERROR",
         )
+        prefs = utils.get_preferences(context)
+        if prefs:
+            header.prop(prefs, "auto_alpha_scanner_enabled", text="AutoScanner Alpha")
+            header.prop(prefs, "fix_power_of_two_image", text="Fix Power Of 2")
 
         if not utils.is_sollumz_available():
             warning = layout.box()
@@ -166,16 +170,16 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
         apply_resize = resize_all_row.operator(operators.S27YTD_OT_apply_resize_all.bl_idname, text="Apply Resize")
         apply_resize.pack_index = pack_index
         resize_all_box.label(text="Makes images smaller and never larger.", icon="INFO")
-        resize_all_box.label(text="Keeps aspect ratio based on the largest side.")
+        resize_all_box.label(text="Keeps aspect ratio based on the largest side before optional Power2 fix.")
 
         if not pack.textures:
             unique_box.label(text="No textures found yet. Add assets or refresh the pack.")
             return
 
         for texture in pack.textures:
-            self._draw_texture(unique_box, texture)
+            self._draw_texture(unique_box, texture, prefs)
 
-    def _draw_texture(self, layout, texture):
+    def _draw_texture(self, layout, texture, prefs=None):
         texture_box = layout.box()
 
         top = texture_box.row(align=True)
@@ -211,6 +215,9 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
             body.label(text=f"Samplers: {texture.sampler_hints}")
         if utils.should_review_sampler_alpha(texture):
             body.label(text="Suggested DXT1. Review manually if this map stores gloss/mask alpha.", icon="INFO")
+        compression_warning = utils.get_compression_validation_warning(texture, prefs=prefs)
+        if compression_warning:
+            body.label(text=compression_warning, icon="ERROR")
         if texture.embedded_ref_count > 0 and texture.external_ref_count > 0:
             body.label(text="Embedded: Mixed (embedded + external)", icon="PACKAGE")
         else:
@@ -224,7 +231,7 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
         settings_row = body.row(align=True)
         settings_row.prop(texture, "compression", text="Compression")
         settings_row.prop(texture, "resize_max_dimension", text="Resize")
-        body.label(text=utils.describe_resize_setting(texture), icon="FULLSCREEN_ENTER")
+        body.label(text=utils.describe_resize_setting(texture, prefs), icon="FULLSCREEN_ENTER")
 
         if texture.has_conflict or texture.warning:
             body.label(text=texture.warning or "Duplicate logical texture name detected.", icon="ERROR")
