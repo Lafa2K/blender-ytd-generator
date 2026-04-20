@@ -10,11 +10,6 @@ import bpy
 
 from .model import ADDON_ID, bulk_resize_choice_for_dimensions, clamp_resize_choice
 
-try:
-    import numpy as np
-except Exception:
-    np = None
-
 
 SOLLUMZ_FRAGMENT = "sollumz_fragment"
 SOLLUMZ_DRAWABLE = "sollumz_drawable"
@@ -35,14 +30,6 @@ ALPHA_RENDER_BUCKETS = {
     "CUTOUT",
     "DISPLACEMENT_ALPHA",
 }
-ALPHA_CAPABLE_SOURCE_EXTS = {
-    ".png",
-    ".tga",
-    ".tif",
-    ".tiff",
-    ".webp",
-    ".dds",
-}
 SUPPORTED_SOURCE_EXTS = {
     ".png",
     ".jpg",
@@ -59,8 +46,6 @@ ORIGINAL_IMAGE_NAME_PROP = "s27_ytd_original_image_name"
 INJECTED_DDS_PATH_PROP = "s27_ytd_injected_dds_path"
 INJECTED_IMAGE_NAME_PROP = "s27_ytd_injected_image_name"
 INJECTED_TEXTURE_NAME_PROP = "s27_ytd_injected_texture_name"
-ALPHA_SCAN_SESSION_CACHE_LIMIT = 1024
-ALPHA_SCAN_SESSION_CACHE: dict[tuple, float] = {}
 
 
 def get_preferences(context) -> object | None:
@@ -569,136 +554,8 @@ def _append_csv_value(csv_text: str, value: str) -> str:
     return ",".join(values)
 
 
-def _alpha_cutoff_value(prefs) -> float:
-    cutoff = getattr(prefs, "fake_alpha_cutoff", 250) if prefs else 250
-    return max(0.0, min(255.0, float(cutoff))) / 255.0
-
-
-def is_alpha_scanner_enabled(prefs) -> bool:
-    return bool(getattr(prefs, "auto_alpha_scanner_enabled", True))
-
-
 def is_fix_power_of_two_enabled(prefs) -> bool:
     return bool(getattr(prefs, "fix_power_of_two_image", True))
-
-
-def _alpha_cache_key(image: bpy.types.Image, prefs, stop_after_pct: float | None = None) -> tuple:
-    width, height = image.size
-    source_path = resolve_image_source_path(image)
-    source_mtime = os.path.getmtime(source_path) if source_path and os.path.isfile(source_path) else 0.0
-    packed = getattr(image, "packed_file", None)
-    return (
-        image.as_pointer(),
-        image.name,
-        int(width),
-        int(height),
-        int(getattr(image, "channels", 4) or 4),
-        bool(getattr(image, "is_dirty", False)),
-        source_path,
-        source_mtime,
-        bool(packed),
-        _alpha_cutoff_value(prefs),
-        None if stop_after_pct is None else float(stop_after_pct),
-    )
-
-
-def _alpha_session_cache_key(image: bpy.types.Image, prefs, stop_after_pct: float | None = None) -> tuple | None:
-    if bool(getattr(image, "is_dirty", False)):
-        return None
-
-    source_path = resolve_image_source_path(image)
-    if not source_path or not os.path.isfile(source_path):
-        return None
-
-    width, height = image.size
-    return (
-        normalize_path(source_path),
-        os.path.getmtime(source_path),
-        os.path.getsize(source_path),
-        int(width),
-        int(height),
-        int(getattr(image, "channels", 4) or 4),
-        _alpha_cutoff_value(prefs),
-        None if stop_after_pct is None else float(stop_after_pct),
-    )
-
-
-def _remember_alpha_session_cache(cache_key: tuple | None, alpha_pct: float):
-    if cache_key is None:
-        return
-
-    if len(ALPHA_SCAN_SESSION_CACHE) >= ALPHA_SCAN_SESSION_CACHE_LIMIT:
-        ALPHA_SCAN_SESSION_CACHE.clear()
-    ALPHA_SCAN_SESSION_CACHE[cache_key] = alpha_pct
-
-
-def compute_alpha_coverage_pct(
-    image: bpy.types.Image | None,
-    prefs,
-    alpha_cache: dict | None = None,
-    stop_after_pct: float | None = None,
-) -> float:
-    if image is None:
-        return 0.0
-
-    width, height = image.size
-    channels = int(getattr(image, "channels", 4) or 4)
-    if width <= 0 or height <= 0 or channels < 4:
-        return 0.0
-
-    cache_key = _alpha_cache_key(image, prefs, stop_after_pct) if alpha_cache is not None else None
-    if cache_key is not None and cache_key in alpha_cache:
-        return alpha_cache[cache_key]
-
-    session_cache_key = _alpha_session_cache_key(image, prefs, stop_after_pct)
-    if session_cache_key is not None and session_cache_key in ALPHA_SCAN_SESSION_CACHE:
-        alpha_pct = ALPHA_SCAN_SESSION_CACHE[session_cache_key]
-        if cache_key is not None:
-            alpha_cache[cache_key] = alpha_pct
-        return alpha_pct
-
-    pixel_count = int(width) * int(height)
-    if pixel_count <= 0:
-        return 0.0
-
-    cutoff = _alpha_cutoff_value(prefs)
-    stop_after_count = None
-    if stop_after_pct is not None:
-        stop_after_count = int(pixel_count * max(0.0, min(100.0, float(stop_after_pct))) / 100.0)
-
-    try:
-        if np is not None and stop_after_count is None:
-            pixels = np.empty(pixel_count * channels, dtype=np.float32)
-            image.pixels.foreach_get(pixels)
-            alpha = pixels[channels - 1 :: channels]
-            count = int(np.count_nonzero(alpha < cutoff))
-        else:
-            count = 0
-            chunk_pixel_count = 262144
-            for pixel_start in range(0, pixel_count, chunk_pixel_count):
-                pixel_end = min(pixel_count, pixel_start + chunk_pixel_count)
-                value_start = pixel_start * channels
-                value_end = pixel_end * channels
-                pixels = image.pixels[value_start:value_end]
-
-                if np is not None:
-                    alpha = np.asarray(pixels, dtype=np.float32)[channels - 1 :: channels]
-                    count += int(np.count_nonzero(alpha < cutoff))
-                else:
-                    for idx in range(channels - 1, len(pixels), channels):
-                        if pixels[idx] < cutoff:
-                            count += 1
-
-                if stop_after_count is not None and count > stop_after_count:
-                    break
-    except Exception:
-        return 0.0
-
-    alpha_pct = (count / pixel_count) * 100.0
-    if cache_key is not None:
-        alpha_cache[cache_key] = alpha_pct
-    _remember_alpha_session_cache(session_cache_key, alpha_pct)
-    return alpha_pct
 
 
 def _sampler_prefers_data(sampler_hints: str) -> bool:
@@ -706,159 +563,26 @@ def _sampler_prefers_data(sampler_hints: str) -> bool:
     return any(token in text for token in NORMAL_HINT_TOKENS)
 
 
-def _texture_source_extension(texture_item) -> str:
-    source_path = bpy.path.abspath(texture_item.source_path) if texture_item.source_path else ""
-    return os.path.splitext(source_path)[1].lower() if source_path else ""
-
-
 def _texture_source_path(texture_item) -> str:
     source_path = bpy.path.abspath(texture_item.source_path) if texture_item.source_path else ""
     return os.path.abspath(source_path) if source_path and os.path.isfile(source_path) else ""
-
-
-def _png_may_have_alpha(source_path: str) -> bool | None:
-    try:
-        with open(source_path, "rb") as handle:
-            if handle.read(8) != b"\x89PNG\r\n\x1a\n":
-                return None
-
-            ihdr_length = int.from_bytes(handle.read(4), "big")
-            if handle.read(4) != b"IHDR" or ihdr_length < 13:
-                return None
-
-            ihdr = handle.read(ihdr_length)
-            handle.read(4)  # CRC
-            color_type = ihdr[9]
-            if color_type in {4, 6}:
-                return True
-
-            # PNG color types 0, 2 and 3 only carry transparency through tRNS.
-            while True:
-                raw_length = handle.read(4)
-                if len(raw_length) != 4:
-                    return False
-                chunk_length = int.from_bytes(raw_length, "big")
-                chunk_type = handle.read(4)
-                if chunk_type == b"tRNS":
-                    return True
-                if chunk_type == b"IDAT":
-                    return False
-                handle.seek(chunk_length + 4, os.SEEK_CUR)
-    except Exception:
-        return None
-
-
-def _tga_may_have_alpha(source_path: str) -> bool | None:
-    try:
-        with open(source_path, "rb") as handle:
-            header = handle.read(18)
-        if len(header) != 18:
-            return None
-
-        pixel_depth = header[16]
-        alpha_bits = header[17] & 0x0F
-        return pixel_depth >= 32 and alpha_bits > 0
-    except Exception:
-        return None
-
-
-def _source_file_may_have_alpha(texture_item) -> bool:
-    source_ext = _texture_source_extension(texture_item)
-    if source_ext and source_ext not in ALPHA_CAPABLE_SOURCE_EXTS:
-        return False
-
-    source_path = _texture_source_path(texture_item)
-    if not source_path:
-        return True
-
-    if source_ext == ".png":
-        result = _png_may_have_alpha(source_path)
-        if result is not None:
-            return result
-
-    if source_ext == ".tga":
-        result = _tga_may_have_alpha(source_path)
-        if result is not None:
-            return result
-
-    return True
-
-
-def _can_source_have_alpha(texture_item) -> bool:
-    return _source_file_may_have_alpha(texture_item)
-
-
-def compute_texture_alpha_coverage_pct(
-    texture_item,
-    prefs,
-    alpha_cache: dict | None = None,
-    stop_after_pct: float | None = None,
-) -> float:
-    if not is_alpha_scanner_enabled(prefs):
-        return 0.0
-
-    if not _can_source_have_alpha(texture_item):
-        return 0.0
-
-    image = texture_item.image
-    if image is None or getattr(image, "channels", 4) < 4:
-        return 0.0
-
-    return compute_alpha_coverage_pct(image, prefs, alpha_cache, stop_after_pct)
-
-
-def suggest_compression(texture_item, prefs, alpha_pct: float | None = None, alpha_cache: dict | None = None) -> str:
+def suggest_compression(texture_item, prefs=None) -> str:
     if getattr(texture_item, "alpha_material_hint", ""):
         return "DXT5"
-
-    if not is_alpha_scanner_enabled(prefs):
-        return "DXT1"
-
-    if not _can_source_have_alpha(texture_item):
-        return "DXT1"
-
-    image = texture_item.image
-    if image is None:
-        return "DXT1"
-
-    if getattr(image, "channels", 4) < 4:
-        return "DXT1"
-
-    tolerance = getattr(prefs, "alpha_tolerance_pct", 2.0) if prefs else 2.0
-    if alpha_pct is None:
-        alpha_pct = compute_texture_alpha_coverage_pct(texture_item, prefs, alpha_cache, tolerance)
-    return "DXT5" if alpha_pct > tolerance else "DXT1"
+    return "DXT1"
 
 
 def describe_suggestion(texture_item, prefs=None) -> str:
     if getattr(texture_item, "alpha_material_hint", ""):
         return texture_item.alpha_material_hint
-
-    source_ext = _texture_source_extension(texture_item)
-    if source_ext and source_ext not in ALPHA_CAPABLE_SOURCE_EXTS:
-        return f"Source format {source_ext}"
-
-    image = texture_item.image
-    if image is None:
-        return "Default"
-
-    if getattr(image, "channels", 4) < 4:
-        return "No alpha channel"
-
-    if not is_alpha_scanner_enabled(prefs):
-        return "Alpha scanner off"
-
-    if not _source_file_may_have_alpha(texture_item):
-        return "No source alpha"
-
-    return "Alpha scan"
+    return "Default"
 
 
 def should_review_sampler_alpha(texture_item) -> bool:
     return _sampler_prefers_data(texture_item.sampler_hints) and texture_item.suggested_compression == "DXT1"
 
 
-def refresh_unique_texture_metadata(texture_item, prefs, alpha_cache: dict | None = None):
+def refresh_unique_texture_metadata(texture_item, prefs):
     image = texture_item.image
     source_path = _texture_source_path(texture_item)
     source_dimensions = get_source_file_dimensions(source_path)
@@ -872,20 +596,11 @@ def refresh_unique_texture_metadata(texture_item, prefs, alpha_cache: dict | Non
             texture_item.width = int(image.size[0])
             texture_item.height = int(image.size[1])
 
-        if getattr(texture_item, "alpha_material_hint", ""):
-            alpha_pct = 0.0
-        elif image is not None:
-            tolerance = getattr(prefs, "alpha_tolerance_pct", 2.0) if prefs else 2.0
-            alpha_pct = compute_texture_alpha_coverage_pct(texture_item, prefs, alpha_cache, tolerance)
-        else:
-            alpha_pct = 0.0
-        texture_item.alpha_coverage_pct = alpha_pct
-        texture_item.suggested_compression = suggest_compression(texture_item, prefs, alpha_pct, alpha_cache)
+        texture_item.suggested_compression = suggest_compression(texture_item, prefs)
         texture_item.suggested_reason = describe_suggestion(texture_item, prefs)
     else:
         texture_item.width = 0
         texture_item.height = 0
-        texture_item.alpha_coverage_pct = 0.0
         texture_item.suggested_compression = "DXT1"
         texture_item.suggested_reason = "Default"
 
@@ -1009,19 +724,9 @@ def _capture_texture_settings(pack, prefs) -> dict[str, dict]:
             "metadata_signature": getattr(item, "metadata_signature", ""),
             "width": int(getattr(item, "width", 0) or 0),
             "height": int(getattr(item, "height", 0) or 0),
-            "alpha_coverage_pct": float(getattr(item, "alpha_coverage_pct", 0.0) or 0.0),
             "source_exists": bool(getattr(item, "source_exists", False)),
         }
     return settings
-
-
-def _alpha_metadata_prefs_signature(prefs) -> tuple:
-    tolerance = getattr(prefs, "alpha_tolerance_pct", 2.0) if prefs else 2.0
-    return (
-        is_alpha_scanner_enabled(prefs),
-        _alpha_cutoff_value(prefs),
-        float(tolerance),
-    )
 
 
 def _texture_metadata_signature(texture_item, prefs) -> tuple | None:
@@ -1042,7 +747,6 @@ def _texture_metadata_signature(texture_item, prefs) -> tuple | None:
         int(image_width or 0),
         int(image_height or 0),
         int(getattr(image, "channels", 4) or 4) if image is not None else 0,
-        _alpha_metadata_prefs_signature(prefs),
     )
 
 
@@ -1050,13 +754,8 @@ def _metadata_signature_text(signature: tuple | None) -> str:
     return repr(signature) if signature is not None else ""
 
 
-def _refresh_suggestion_from_cached_alpha(texture_item, prefs):
-    texture_item.suggested_compression = suggest_compression(
-        texture_item,
-        prefs,
-        float(getattr(texture_item, "alpha_coverage_pct", 0.0) or 0.0),
-        None,
-    )
+def _refresh_suggestion_from_metadata(texture_item, prefs):
+    texture_item.suggested_compression = suggest_compression(texture_item, prefs)
     texture_item.suggested_reason = describe_suggestion(texture_item, prefs)
 
 
@@ -1071,10 +770,9 @@ def _reuse_texture_metadata_if_current(texture_item, existing_settings: dict | N
 
     texture_item.width = int(existing_settings.get("width", 0) or 0)
     texture_item.height = int(existing_settings.get("height", 0) or 0)
-    texture_item.alpha_coverage_pct = float(existing_settings.get("alpha_coverage_pct", 0.0) or 0.0)
     texture_item.source_exists = bool(existing_settings.get("source_exists", True))
     texture_item.metadata_signature = current_signature
-    _refresh_suggestion_from_cached_alpha(texture_item, prefs)
+    _refresh_suggestion_from_metadata(texture_item, prefs)
     texture_item.resize_max_dimension = clamp_resize_choice(
         getattr(texture_item, "resize_max_dimension", "ORIGINAL"),
         texture_item.width,
@@ -1096,7 +794,6 @@ def _set_progress(context, current: int, total: int):
 def rebuild_pack_from_assets(context, pack):
     prefs = get_preferences(context)
     existing_texture_settings = _capture_texture_settings(pack, prefs)
-    alpha_cache: dict = {}
     metadata_current_texture_names: set[str] = set()
     pack.textures.clear()
     total_assets = max(1, len(pack.assets))
@@ -1146,7 +843,7 @@ def rebuild_pack_from_assets(context, pack):
                         unique.resize_max_dimension = existing_settings["resize_max_dimension"]
                         unique.expanded = existing_settings["expanded"]
                     if not _reuse_texture_metadata_if_current(unique, existing_settings, prefs):
-                        refresh_unique_texture_metadata(unique, prefs, alpha_cache)
+                        refresh_unique_texture_metadata(unique, prefs)
                         if existing_settings:
                             unique.resize_max_dimension = clamp_resize_choice(
                                 existing_settings["resize_max_dimension"],
@@ -1186,10 +883,10 @@ def rebuild_pack_from_assets(context, pack):
                         or (not unique.source_path and previous_image_pointer != current_image_pointer)
                     )
                     if source_changed:
-                        refresh_unique_texture_metadata(unique, prefs, alpha_cache)
+                        refresh_unique_texture_metadata(unique, prefs)
                         metadata_current_texture_names.add(unique.texture_name)
                     elif previous_alpha_hint != unique.alpha_material_hint:
-                        _refresh_suggestion_from_cached_alpha(unique, prefs)
+                        _refresh_suggestion_from_metadata(unique, prefs)
 
                 ref_item.pack_texture_name = unique.texture_name
 

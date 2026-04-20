@@ -80,7 +80,6 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
         )
         prefs = utils.get_preferences(context)
         if prefs:
-            header.prop(prefs, "auto_alpha_scanner_enabled", text="AutoScanner Alpha")
             header.prop(prefs, "fix_power_of_two_image", text="Fix Power Of 2")
 
         if not utils.is_sollumz_available():
@@ -200,17 +199,9 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
 
         source_name = os.path.basename(texture.source_path) if texture.source_path else "<packed or generated>"
         body.label(text=f"Source: {source_name}", icon="FILE_IMAGE")
-        if texture.suggested_reason == "Alpha scan":
-            body.label(
-                text=(
-                    f"Suggested: {texture.suggested_compression} ({texture.suggested_reason}) | "
-                    f"{texture.width}x{texture.height} | alpha {texture.alpha_coverage_pct:.2f}%"
-                )
-            )
-        else:
-            body.label(
-                text=f"Suggested: {texture.suggested_compression} ({texture.suggested_reason}) | {texture.width}x{texture.height}"
-            )
+        body.label(
+            text=f"Suggested: {texture.suggested_compression} ({texture.suggested_reason}) | {texture.width}x{texture.height}"
+        )
         if texture.sampler_hints:
             body.label(text=f"Samplers: {texture.sampler_hints}")
         if utils.should_review_sampler_alpha(texture):

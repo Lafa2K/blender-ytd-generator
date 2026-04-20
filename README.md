@@ -44,7 +44,7 @@ The add-on can:
 | Multi-pack workflow | Create and manage multiple YTD packs in the same Blender scene |
 | Sollumz-aware asset scan | Collects textures from selected Drawable / Fragment roots using Sollumz material nodes |
 | Unique texture grouping | Deduplicates logical textures inside each pack |
-| Auto compression suggestion | Recommends `DXT1` or `DXT5` based on source and alpha usage |
+| Auto compression suggestion | Recommends `DXT1` or `DXT5` based on Sollumz alpha-style material usage |
 | Manual compression override | Override textures to `Auto`, `DXT1`, `DXT5`, or `ARGB8` |
 | Per-texture resize | Reduce texture size by limiting the largest side while preserving aspect ratio |
 | Resize All | Apply one resize target to every unique texture in the active pack |
@@ -117,7 +117,6 @@ For each texture, the add-on can display:
 - source file name
 - suggested compression
 - dimensions
-- alpha coverage hint
 - sampler names
 - embedded/external state
 - duplicate-name warnings
@@ -128,24 +127,20 @@ For each texture, the add-on can display:
 
 ### Auto Compression
 
-When `Compression` is set to `Auto`, the add-on evaluates the texture using:
+When `Compression` is set to `Auto`, the add-on keeps the rule simple:
 
-- source image format
-- alpha channel presence
-- alpha coverage percentage
-- fake-alpha threshold preferences
+- textures used by Sollumz alpha-style materials suggest `DXT5`
+- every other texture suggests `DXT1`
 
-`AutoScanner Alpha` is enabled by default. When enabled, the add-on scans only the alpha channel, skips sources that cannot have alpha, and stops as soon as the configured `Auto Alpha Tolerance` threshold is exceeded. When disabled, `Auto` does not scan alpha and falls back to `DXT1`; you can still force `DXT5` manually per texture.
+This keeps export behavior predictable and removes pixel-based alpha inspection from add, refresh, export, and injection workflows.
 
-Alpha scan results are cached for the current Blender session when the source file is unchanged, so changing resize values or refreshing the same pack does not rescan the same texture pixels unnecessarily.
-
-Refreshing a pack also reuses metadata from textures that were already scanned when the source file, image dimensions, alpha settings, and material alpha hint are unchanged. New or changed textures are still evaluated normally.
+Refreshing a pack still reuses metadata from textures that were already processed when the source file and image dimensions are unchanged. New or changed textures are still evaluated normally.
 
 Textures without a stable source file on disk, such as packed or generated images, are not reused through the incremental metadata cache because Blender can change their dimensions without a file timestamp to validate against.
 
-Texture metadata stores the signature of the last completed scan. If the source file changes on disk or Blender keeps a stale image datablock, refresh uses the real source-file dimensions and recalculates metadata instead of reusing old width/height.
+Texture metadata stores the signature of the last completed refresh. If the source file changes on disk or Blender keeps a stale image datablock, refresh uses the real source-file dimensions and recalculates metadata instead of reusing old width/height.
 
-When a diffuse texture is used by a Sollumz alpha-style material (`Alpha`, `Cutout`, `Decal`, adaptive alpha-style buckets, or alpha/cutout shader names), `Auto` suggests `DXT5` immediately and skips the pixel scan for that texture.
+When a diffuse texture is used by a Sollumz alpha-style material (`Alpha`, `Cutout`, `Decal`, adaptive alpha-style buckets, or alpha/cutout shader names), `Auto` suggests `DXT5` immediately.
 
 ### Manual Overrides
 
@@ -315,13 +310,9 @@ The preferences panel includes:
 
 - `Texconv Path`
 - `Default Build Folder`
-- `AutoScanner Alpha`
-- `Auto Alpha Tolerance`
-- `Fake Alpha Cutoff`
+- `Fix Power Of 2 Image`
 
-These settings control where `texconv.exe` is found, where exports go by default, and how automatic alpha-based compression suggestions are calculated.
-
-The alpha scan skips sources without alpha support and stops early as soon as the configured `Auto Alpha Tolerance` threshold is exceeded.
+These settings control where `texconv.exe` is found, where exports go by default, and whether exported output is snapped down to power-of-two dimensions.
 
 Export, inject, and asset rebuild operations also update Blender's status progress indicator where supported by the running Blender version.
 

@@ -2,7 +2,6 @@ import bpy
 from bpy.props import (
     BoolProperty,
     CollectionProperty,
-    FloatProperty,
     IntProperty,
     PointerProperty,
     StringProperty,
@@ -97,40 +96,17 @@ class S27YTDManagerPreferences(AddonPreferences):
         default="//S27_YTD_Build",
         description="Base folder used when a scene does not override the build directory",
     )
-    auto_alpha_scanner_enabled: BoolProperty(
-        name="AutoScanner Alpha",
-        description="Automatically scan alpha pixels to suggest DXT5 when Auto compression is enabled",
-        default=True,
-    )
     fix_power_of_two_image: BoolProperty(
         name="Fix Power Of 2 Image",
         description="Automatically shrink exported output to power-of-two dimensions for each axis, never enlarging the image",
         default=True,
-    )
-    alpha_tolerance_pct: FloatProperty(
-        name="Auto Alpha Tolerance",
-        description="Pixels with alpha below the fake-alpha cutoff must exceed this percentage to switch Auto to DXT5",
-        default=2.0,
-        min=0.0,
-        max=100.0,
-        precision=2,
-    )
-    fake_alpha_cutoff: IntProperty(
-        name="Fake Alpha Cutoff",
-        description="Pixels below this 0-255 alpha value count as transparent for Auto compression",
-        default=250,
-        min=0,
-        max=255,
     )
     def draw(self, _context):
         layout = self.layout
         layout.use_property_split = True
         layout.prop(self, "texconv_path")
         layout.prop(self, "default_output_dir")
-        layout.prop(self, "auto_alpha_scanner_enabled")
         layout.prop(self, "fix_power_of_two_image")
-        layout.prop(self, "alpha_tolerance_pct")
-        layout.prop(self, "fake_alpha_cutoff")
 
 
 class S27YTDTextureRef(PropertyGroup):
@@ -173,7 +149,6 @@ class S27YTDUniqueTexture(PropertyGroup):
     external_ref_count: IntProperty(name="External Ref Count", default=0)
     width: IntProperty(name="Width", default=0)
     height: IntProperty(name="Height", default=0)
-    alpha_coverage_pct: FloatProperty(name="Alpha Coverage", default=0.0, precision=2)
     ref_count: IntProperty(name="Reference Count", default=0)
     exported_path: StringProperty(name="Exported Path")
     embedded_exported_path: StringProperty(name="Embedded Exported Path")
