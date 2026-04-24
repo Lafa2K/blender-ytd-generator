@@ -2,7 +2,7 @@
 
 # S27 YTD Manager
 
-Professional Blender add-on for building, organizing, resizing, exporting, and reinjecting GTA V `.ytd` texture packages from Sollumz assets.
+Blender add-on for building, organizing, resizing, exporting, and reinjecting GTA V `.ytd` texture packages from Sollumz assets.
 
 Designed for production-oriented workflows that need clean texture packaging, fast iteration, and predictable output from inside Blender.
 
