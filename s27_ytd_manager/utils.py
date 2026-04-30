@@ -9,6 +9,7 @@ from xml.sax.saxutils import escape
 import bpy
 
 from .model import ADDON_ID, bulk_resize_choice_for_dimensions, clamp_resize_choice
+from . import ytd_binary
 
 
 SOLLUMZ_FRAGMENT = "sollumz_fragment"
@@ -1210,7 +1211,7 @@ def load_image_for_injection(dds_path: str, is_data: bool) -> bpy.types.Image:
     return image
 
 
-def export_pack(context, pack) -> tuple[str, int, int]:
+def export_pack(context, pack, build_ytd: bool = False):
     rebuild_pack_from_assets(context, pack)
 
     prefs = get_preferences(context)
@@ -1339,17 +1340,36 @@ def export_pack(context, pack) -> tuple[str, int, int]:
     if os.path.isfile(legacy_xml_path):
         os.remove(legacy_xml_path)
 
+    xml_text = build_ytd_xml(exported_rows)
     xml_path = os.path.join(build_root, f"{sanitize_name(pack.name)}.ytd.xml")
     with open(xml_path, "w", encoding="utf-8") as handle:
-        handle.write(build_ytd_xml(exported_rows))
+        handle.write(xml_text)
+
+    ytd_path = ""
+    if build_ytd:
+        ytd_path = os.path.join(build_root, f"{sanitize_name(pack.name)}.ytd")
+        ytd_binary.build_ytd_file_from_xml(xml_text, output_dir, ytd_path)
 
     pack.last_export_dir = output_dir
+    if build_ytd:
+        pack.status = (
+            f"Built {len(exported_rows)} texture(s) to {ytd_path}, "
+            f"skipped {skipped_missing_count} missing/no-data texture(s), "
+            f"cleaned {removed_ytd + removed_embedded} stale DDS file(s)"
+        )
+        return xml_path, len(exported_rows), skipped_missing_count, ytd_path
+
     pack.status = (
         f"Exported {len(exported_rows)} texture(s) to {output_dir}, "
         f"skipped {skipped_missing_count} missing/no-data texture(s), "
         f"cleaned {removed_ytd + removed_embedded} stale DDS file(s), XML in {build_root}"
     )
     return xml_path, len(exported_rows), skipped_missing_count
+
+
+def build_pack_ytd(context, pack) -> tuple[str, int, int]:
+    _xml_path, count, skipped, ytd_path = export_pack(context, pack, build_ytd=True)
+    return ytd_path, count, skipped
 
 
 def inject_pack(context, pack) -> int:

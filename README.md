@@ -35,6 +35,7 @@ The add-on can:
 - suggest compression automatically
 - resize textures without upscaling
 - export DDS files plus OpenFormats XML
+- build binary `.ytd` files directly inside Blender
 - inject exported DDS files back into the scene
 
 ## Core Capabilities
@@ -54,6 +55,7 @@ The add-on can:
 | Embedded texture support | Handles embedded-only, external-only, and mixed embedded/external textures |
 | DDS export | Converts supported sources into DDS through `texconv.exe` |
 | XML generation | Writes OpenFormats `.ytd.xml` with the exported dimensions and mip count |
+| Python YTD build | Builds binary `.ytd` files directly from the generated XML and DDS files |
 | DDS reinjection | Reloads exported DDS files back into Sollumz nodes for validation |
 | Output cleanup | Removes stale DDS files that no longer belong to the current pack |
 | BC/DXT validation | Warns when `DXT1` / `DXT5` output dimensions are not multiples of 4 |
@@ -80,6 +82,7 @@ View3D > Sidebar > S27 YTD
 5. Click `Add Selected`.
 6. Review the `Unique Textures` list.
 7. Adjust `Compression` and `Resize` as needed.
+8. Click `Export` for DDS/XML output or `Build YTD` for a ready `.ytd` file.
 8. Click `Export`.
 9. Optionally click `Inject DDS`.
 

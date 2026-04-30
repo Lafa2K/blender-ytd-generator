@@ -90,6 +90,7 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
         actions = layout.row(align=True)
         actions.operator(operators.S27YTD_OT_add_pack.bl_idname, icon="ADD", text="Add YTD")
         actions.operator(operators.S27YTD_OT_export_all_packs.bl_idname, icon="EXPORT", text="Export All")
+        actions.operator(operators.S27YTD_OT_build_all_ytd_packs.bl_idname, icon="PACKAGE", text="Build All YTD")
         actions.operator(operators.S27YTD_OT_inject_all_packs.bl_idname, icon="TEXTURE", text="Inject All DDS")
 
         pack, pack_index = _active_pack(scene)
@@ -148,6 +149,8 @@ class S27YTD_PT_MainPanel(bpy.types.Panel):
             refresh.pack_index = pack_index
             export = buttons.operator(operators.S27YTD_OT_export_pack.bl_idname, icon="EXPORT", text="Export")
             export.pack_index = pack_index
+            build_ytd = buttons.operator(operators.S27YTD_OT_build_ytd_pack.bl_idname, icon="PACKAGE", text="Build YTD")
+            build_ytd.pack_index = pack_index
             inject = buttons.operator(operators.S27YTD_OT_inject_pack.bl_idname, icon="TEXTURE", text="Inject DDS")
             inject.pack_index = pack_index
 

@@ -147,6 +147,31 @@ class S27YTD_OT_export_pack(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class S27YTD_OT_build_ytd_pack(bpy.types.Operator):
+    bl_idname = "s27_ytd.build_ytd_pack"
+    bl_label = "Build YTD"
+    bl_description = "Convert textures to DDS, generate XML, and build the binary YTD directly in Python"
+
+    pack_index: IntProperty()
+
+    def execute(self, context):
+        pack = _get_pack(context.scene, self.pack_index)
+        if pack is None:
+            return {"CANCELLED"}
+
+        try:
+            ytd_path, count, skipped = utils.build_pack_ytd(context, pack)
+        except Exception as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+
+        if skipped > 0:
+            self.report({"WARNING"}, f"Built {count} texture(s) to {ytd_path}. Skipped {skipped} missing/no-data texture(s).")
+        else:
+            self.report({"INFO"}, f"Built {count} texture(s) to {ytd_path}")
+        return {"FINISHED"}
+
+
 class S27YTD_OT_export_all_packs(bpy.types.Operator):
     bl_idname = "s27_ytd.export_all_packs"
     bl_label = "Export All"
@@ -168,6 +193,30 @@ class S27YTD_OT_export_all_packs(bpy.types.Operator):
             self.report({"WARNING"}, f"Exported {exported} YTD pack(s). Skipped {skipped_total} missing/no-data texture(s).")
         else:
             self.report({"INFO"}, f"Exported {exported} YTD pack(s).")
+        return {"FINISHED"}
+
+
+class S27YTD_OT_build_all_ytd_packs(bpy.types.Operator):
+    bl_idname = "s27_ytd.build_all_ytd_packs"
+    bl_label = "Build All YTD"
+    bl_description = "Build binary YTD files for every YTD pack in the scene"
+
+    def execute(self, context):
+        built = 0
+        skipped_total = 0
+        for pack in context.scene.s27_ytd_packs:
+            try:
+                _, _, skipped = utils.build_pack_ytd(context, pack)
+                built += 1
+                skipped_total += skipped
+            except Exception as exc:
+                self.report({"ERROR"}, f"{pack.name}: {exc}")
+                return {"CANCELLED"}
+
+        if skipped_total > 0:
+            self.report({"WARNING"}, f"Built {built} YTD pack(s). Skipped {skipped_total} missing/no-data texture(s).")
+        else:
+            self.report({"INFO"}, f"Built {built} YTD pack(s).")
         return {"FINISHED"}
 
 
@@ -222,7 +271,9 @@ CLASSES = (
     S27YTD_OT_remove_asset,
     S27YTD_OT_apply_resize_all,
     S27YTD_OT_export_pack,
+    S27YTD_OT_build_ytd_pack,
     S27YTD_OT_export_all_packs,
+    S27YTD_OT_build_all_ytd_packs,
     S27YTD_OT_inject_pack,
     S27YTD_OT_inject_all_packs,
 )
