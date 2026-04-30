@@ -4,7 +4,7 @@ from . import model, operators, ui
 bl_info = {
     "name": "S27 YTD Manager",
     "author": "Lafa2K + Codex",
-    "version": (1, 2, 0),
+    "version": (1, 2, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > S27 Tab",
     "description": "Manages YTD files for CodeWalker",

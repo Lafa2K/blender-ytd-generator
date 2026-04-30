@@ -1125,7 +1125,13 @@ def run_texconv(
         ]
     )
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "texconv failed without output."
         raise RuntimeError(message)
